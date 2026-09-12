@@ -1,0 +1,15 @@
+{
+  "name": "resolveflow-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ResolveFlow AI - Orchestrated Multi-Agent Customer Complaint Resolution System",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "seed:admin": "npm --prefix server run seed:admin",
+    "seed:orders": "npm --prefix server run seed:orders",
+    "test:server": "npm --prefix server test"
+  },
+  "author": "",
+  "license": "ISC"
+}
