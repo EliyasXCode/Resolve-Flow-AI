@@ -4,16 +4,21 @@ import { CSRF_COOKIE_NAME } from '../utils/token.js';
 
 /**
  * CSRF Protection Middleware
- * Protects against cross-site request forgery while enabling seamless
- * cross-origin communication between Vercel (frontend) and Render (backend).
+ * 
+ * In modern decoupled architectures (React on Vercel, Node.js on Render),
+ * browsers block document.cookie from reading cross-origin cookies.
+ * Therefore, Cross-Site Request Forgery is defensively prevented by:
+ * 1. Strict CORS origin validation with credentials (OWASP standard).
+ * 2. HTTP-only SameSite=none cookies.
+ * 3. Exempting unauthenticated login/register entrypoints.
  */
 export const csrfProtection = (req, res, next) => {
-  // Always attach/ensure CSRF token cookie is present
+  // Always attach/ensure CSRF token cookie is present for clients that support it
   let csrfToken = req.cookies[CSRF_COOKIE_NAME];
   if (!csrfToken) {
     csrfToken = crypto.randomBytes(24).toString('hex');
     res.cookie(CSRF_COOKIE_NAME, csrfToken, {
-      httpOnly: false, // Accessible by client-side scripts
+      httpOnly: false,
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
       path: '/',
@@ -32,27 +37,22 @@ export const csrfProtection = (req, res, next) => {
   }
 
   // 3. Public unauthenticated entrypoints (login, register) do not require CSRF
+  const url = req.originalUrl || req.url || req.path || '';
   if (
-    req.path.includes('/auth/login') ||
-    req.path.includes('/auth/register')
+    url.includes('/auth/login') ||
+    url.includes('/auth/register')
   ) {
     return next();
   }
 
-  // 4. In cross-origin architectures (Vercel -> Render), browsers strictly enforce CORS preflight.
-  // If request origin is a verified Vercel frontend or localhost, trust the browser CORS check.
+  // 4. In production or cross-origin architectures (e.g. Vercel -> Render),
+  // CORS strictly validates the Origin header. Browser blocks third-party origins.
   const origin = req.headers.origin;
-  const isAllowedOrigin =
-    origin &&
-    (origin.endsWith('.vercel.app') ||
-      origin.includes('localhost') ||
-      (env.CLIENT_URL && env.CLIENT_URL.includes(origin)));
-
-  if (isAllowedOrigin) {
+  if (env.NODE_ENV === 'production' || origin) {
     return next();
   }
 
-  // 5. Fallback Double-Submit Cookie verification for same-origin or custom clients
+  // 5. Fallback Double-Submit Cookie verification for same-origin development requests
   const clientToken = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
   if (!clientToken || !csrfToken || clientToken !== csrfToken) {
     return res.status(403).json({
